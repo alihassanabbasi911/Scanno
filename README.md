@@ -42,6 +42,15 @@ conditional formatting, pivot tables, and some presentation layout features
 are not rendered. Markdown is shown as selectable plain text. Office previews
 are read-only, and files larger than the viewer's 80 MiB input limit are
 offered an external-app fallback before the viewer reads them into memory.
+Scanno uses a local patch of the Office viewer so long DOCX files use layout
+zoom instead of one transformed multi-page layer, avoiding blank later pages
+in Android WebView. PPTX rendering now waits for the renderer's explicit
+completion signal after asynchronous file reading, instead of treating a
+briefly quiet DOM as completion. The workspace cache revision is bumped with
+viewer changes. PPTX shapes that omit position or size transforms now inherit
+available slide-layout/master geometry; when none is available, the renderer
+falls back to a non-SVG representation while preserving associated text,
+instead of aborting the full presentation render.
 
 The Office viewer package is MIT-licensed, and its bundled engines and fonts
 have separate licenses. Scanno includes the required

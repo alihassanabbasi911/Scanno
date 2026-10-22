@@ -95,10 +95,15 @@ class IncomingDocumentService {
       final signature = await file
           .openRead(0, 16)
           .fold<List<int>>(<int>[], (bytes, chunk) => bytes..addAll(chunk));
+      final zipFormat =
+          signature.length >= 2 && signature[0] == 0x50 && signature[1] == 0x4b
+          ? await _readZipFormat(file, size)
+          : null;
       final format = detectIncomingDocumentFormat(
         fileName: copiedName,
         mimeType: copiedMimeType,
         signature: signature,
+        zipFormat: zipFormat,
       );
       final displayName = _withDetectedExtension(copiedName, format);
       return IncomingDocumentResult.success(
@@ -150,5 +155,14 @@ class IncomingDocumentService {
         ? name
         : name.substring(0, name.lastIndexOf('.'));
     return '$stem.${format.extension}';
+  }
+
+  Future<DocumentFormat?> _readZipFormat(File file, int size) async {
+    const maxTailBytes = 65557;
+    final start = size > maxTailBytes ? size - maxTailBytes : 0;
+    final tail = await file
+        .openRead(start, size)
+        .fold<List<int>>(<int>[], (bytes, chunk) => bytes..addAll(chunk));
+    return detectOfficeOpenXmlFormatFromZipTail(tail);
   }
 }

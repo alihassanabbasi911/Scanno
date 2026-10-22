@@ -79,9 +79,8 @@ why each format renders in its own WebView.
 
 ### PDFium — BSD-3-Clause
 
-PDFs render natively through PDFium, which the package uses through `pdfrx`.
-PDFium is not redistributed by this package directly; `pdfrx` carries its own
-notices.
+PDFs render natively through the `pdfrx` package, which embeds PDFium. Not
+redistributed by this package directly; `pdfrx` carries its own notices.
 
 ---
 

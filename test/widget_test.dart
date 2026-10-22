@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:docuscan/app/scanno_app.dart';
 import 'package:docuscan/features/documents/application/document_providers.dart';
 import 'package:docuscan/features/documents/data/document_repository.dart';
+import 'package:docuscan/features/documents/domain/document_format.dart';
 import 'package:docuscan/features/documents/domain/document_record.dart';
 import 'package:docuscan/features/documents/domain/incoming_document.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('routes each supported format to its intended reader', () {
+    expect(documentPreviewKindForExtension('docx'), DocumentPreviewKind.office);
+    expect(documentPreviewKindForExtension('xlsx'), DocumentPreviewKind.office);
+    expect(documentPreviewKindForExtension('pptx'), DocumentPreviewKind.office);
+    expect(documentPreviewKindForExtension('md'), DocumentPreviewKind.markdown);
+    expect(
+      documentPreviewKindForExtension('unknown'),
+      DocumentPreviewKind.unsupported,
+    );
+  });
+
   testWidgets('shows an actionable empty library', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -153,34 +165,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('“Updated.pdf”'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('opens an Office document and reports preview unsupported', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          documentRepositoryProvider.overrideWithValue(
-            _FakeDocumentRepository(
-              documents: [_document('office', 'Report.docx', 'docx')],
-            ),
-          ),
-        ],
-        child: const ScannoApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Report.docx'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Report.docx'), findsOneWidget);
-    expect(
-      find.textContaining('Preview for .docx files is not available yet.'),
-      findsOneWidget,
-    );
-    await tester.pageBack();
     await tester.pumpAndSettle();
   });
 

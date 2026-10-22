@@ -12,6 +12,7 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../application/document_providers.dart';
 import '../data/document_repository.dart';
+import '../domain/document_format.dart';
 import '../domain/document_record.dart';
 import '../domain/incoming_document.dart';
 import '../domain/pdf_reader_logic.dart';
@@ -84,31 +85,19 @@ class _DocumentPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return switch (record.extension.toLowerCase()) {
-      'pdf' => _PdfPreview(
+    return switch (documentPreviewKindForExtension(record.extension)) {
+      DocumentPreviewKind.pdf => _PdfPreview(
         record: record,
         allowAnnotations: allowPdfAnnotations,
       ),
-      'txt' => _TextPreview(path: record.storagePath),
-      'md' ||
-      'markdown' => _TextPreview(path: record.storagePath, markdown: true),
-      'csv' ||
-      'doc' ||
-      'docx' ||
-      'ppt' ||
-      'pptx' ||
-      'rtf' ||
-      'xls' ||
-      'xlsx' => _OfficePreview(record: record),
-      'bmp' ||
-      'gif' ||
-      'jpg' ||
-      'jpeg' ||
-      'png' ||
-      'tif' ||
-      'tiff' ||
-      'webp' => _ImagePreview(path: record.storagePath),
-      _ => _ReaderMessage(
+      DocumentPreviewKind.text => _TextPreview(path: record.storagePath),
+      DocumentPreviewKind.markdown => _TextPreview(
+        path: record.storagePath,
+        markdown: true,
+      ),
+      DocumentPreviewKind.office => _OfficePreview(record: record),
+      DocumentPreviewKind.image => _ImagePreview(path: record.storagePath),
+      DocumentPreviewKind.unsupported => _ReaderMessage(
         message:
             'Preview for .${record.extension} files is not available. '
             'Open it with an app that supports this file type.',

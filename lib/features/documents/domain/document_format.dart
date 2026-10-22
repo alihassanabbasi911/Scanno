@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 enum DocumentFormat {
   pdf('pdf', 'application/pdf'),
   doc('doc', 'application/msword'),
@@ -90,12 +93,46 @@ enum DocumentFormat {
     final normalized = mimeType.split(';').first.trim().toLowerCase();
     return _byMimeType[normalized];
   }
+
+  static DocumentFormat? fromOoxmlEntries(Set<String> entryNames) {
+    if (entryNames.contains('word/document.xml')) return docx;
+    if (entryNames.contains('xl/workbook.xml')) return xlsx;
+    if (entryNames.contains('ppt/presentation.xml')) return pptx;
+    return null;
+  }
 }
+
+enum DocumentPreviewKind { pdf, text, markdown, office, image, unsupported }
+
+DocumentPreviewKind documentPreviewKindForExtension(String extension) =>
+    switch (extension.toLowerCase()) {
+      'pdf' => DocumentPreviewKind.pdf,
+      'txt' => DocumentPreviewKind.text,
+      'md' || 'markdown' => DocumentPreviewKind.markdown,
+      'csv' ||
+      'doc' ||
+      'docx' ||
+      'ppt' ||
+      'pptx' ||
+      'rtf' ||
+      'xls' ||
+      'xlsx' => DocumentPreviewKind.office,
+      'bmp' ||
+      'gif' ||
+      'jpg' ||
+      'jpeg' ||
+      'png' ||
+      'tif' ||
+      'tiff' ||
+      'webp' => DocumentPreviewKind.image,
+      _ => DocumentPreviewKind.unsupported,
+    };
 
 DocumentFormat detectIncomingDocumentFormat({
   required String fileName,
   required String? mimeType,
   required List<int> signature,
+  DocumentFormat? zipFormat,
 }) {
   final extension = fileName.contains('.')
       ? fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase()
@@ -103,7 +140,7 @@ DocumentFormat detectIncomingDocumentFormat({
   final byExtension = DocumentFormat.fromExtension(extension);
   final byMime = DocumentFormat.fromMimeType(mimeType);
   final declared = byExtension ?? byMime;
-  final signatureFormat = _formatFromSignature(signature, declared);
+  final signatureFormat = _formatFromSignature(signature, declared, zipFormat);
 
   if (signatureFormat != null && declared != null) {
     final compatible = switch (signatureFormat) {
@@ -118,11 +155,9 @@ DocumentFormat detectIncomingDocumentFormat({
       DocumentFormat.doc ||
       DocumentFormat.xls ||
       DocumentFormat.ppt => declared == signatureFormat,
-      DocumentFormat.docx || DocumentFormat.xlsx || DocumentFormat.pptx =>
-        declared == signatureFormat ||
-            declared == DocumentFormat.docx ||
-            declared == DocumentFormat.xlsx ||
-            declared == DocumentFormat.pptx,
+      DocumentFormat.docx ||
+      DocumentFormat.xlsx ||
+      DocumentFormat.pptx => declared == signatureFormat,
       _ => true,
     };
     if (!compatible) {
@@ -142,6 +177,7 @@ DocumentFormat detectIncomingDocumentFormat({
 DocumentFormat? _formatFromSignature(
   List<int> bytes,
   DocumentFormat? declared,
+  DocumentFormat? zipFormat,
 ) {
   if (bytes.length >= 4 &&
       bytes[0] == 0x25 &&
@@ -216,11 +252,53 @@ DocumentFormat? _formatFromSignature(
         : null;
   }
   if (bytes.length >= 2 && bytes[0] == 0x50 && bytes[1] == 0x4b) {
-    return declared == DocumentFormat.docx ||
-            declared == DocumentFormat.xlsx ||
-            declared == DocumentFormat.pptx
-        ? declared
-        : null;
+    return zipFormat ??
+        (declared == DocumentFormat.docx ||
+                declared == DocumentFormat.xlsx ||
+                declared == DocumentFormat.pptx
+            ? declared
+            : null);
   }
   return null;
+}
+
+DocumentFormat? detectOfficeOpenXmlFormatFromZipTail(List<int> tail) {
+  if (tail.length < 22) return null;
+  final bytes = Uint8List.fromList(tail);
+  final data = ByteData.sublistView(bytes);
+  final searchStart = tail.length > 65557 ? tail.length - 65557 : 0;
+  var endOfCentralDirectory = -1;
+  for (var offset = tail.length - 22; offset >= searchStart; offset--) {
+    if (data.getUint32(offset, Endian.little) == 0x06054b50) {
+      endOfCentralDirectory = offset;
+      break;
+    }
+  }
+  if (endOfCentralDirectory < 0) return null;
+
+  final entryCount = data.getUint16(endOfCentralDirectory + 10, Endian.little);
+  final directorySize = data.getUint32(
+    endOfCentralDirectory + 12,
+    Endian.little,
+  );
+  var offset = endOfCentralDirectory - directorySize;
+  if (offset < 0) return null;
+  final names = <String>{};
+  for (var entry = 0; entry < entryCount && entry < 5000; entry++) {
+    if (offset + 46 > endOfCentralDirectory ||
+        data.getUint32(offset, Endian.little) != 0x02014b50) {
+      return null;
+    }
+    final nameLength = data.getUint16(offset + 28, Endian.little);
+    final extraLength = data.getUint16(offset + 30, Endian.little);
+    final commentLength = data.getUint16(offset + 32, Endian.little);
+    final nameEnd = offset + 46 + nameLength;
+    if (nameEnd > endOfCentralDirectory) return null;
+    names.add(
+      utf8.decode(bytes.sublist(offset + 46, nameEnd), allowMalformed: true),
+    );
+    offset = nameEnd + extraLength + commentLength;
+    if (offset > endOfCentralDirectory) return null;
+  }
+  return DocumentFormat.fromOoxmlEntries(names);
 }

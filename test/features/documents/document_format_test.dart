@@ -38,6 +38,33 @@ void main() {
     );
   });
 
+  test(
+    'identifies Office Open XML containers independently of MIME metadata',
+    () {
+      final format = DocumentFormat.fromOoxmlEntries({'word/document.xml'});
+      expect(format, DocumentFormat.docx);
+      expect(
+        detectIncomingDocumentFormat(
+          fileName: 'shared-file',
+          mimeType: 'application/octet-stream',
+          signature: [0x50, 0x4b, 0x03, 0x04],
+          zipFormat: format,
+        ),
+        DocumentFormat.docx,
+      );
+      expect(
+        () => detectIncomingDocumentFormat(
+          fileName: 'wrong.xlsx',
+          mimeType:
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          signature: [0x50, 0x4b, 0x03, 0x04],
+          zipFormat: DocumentFormat.docx,
+        ),
+        throwsFormatException,
+      );
+    },
+  );
+
   test('rejects unknown formats instead of guessing from broad MIME types', () {
     expect(
       () => detectIncomingDocumentFormat(
